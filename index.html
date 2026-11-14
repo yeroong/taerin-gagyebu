@@ -29,7 +29,10 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .jua{font-family:'Jua','Gowun Dodum',sans-serif;font-weight:400}
 .num{font-variant-numeric:tabular-nums}
 #app{max-width:480px;margin:0 auto;min-height:100%;padding:0 16px calc(96px + env(safe-area-inset-bottom))}
-.in{color:var(--in)} .out{color:var(--out)} .sv,.save{color:var(--sum-d)}
+.in{color:var(--in)} .out{color:var(--out)} .sv,.save{color:var(--sum-d)} .gf,.gift{color:#B5790A}
+.gbar{display:flex;flex-direction:column;gap:2px;background:#FFF3D6;border-radius:var(--r);padding:10px 16px;margin-bottom:12px;font-size:13px;color:#8A6A2A}
+.gbar b{font-size:15px;color:#7A5200}
+.tag.gft{background:#FFF3D6;color:#B5790A}
 .sum4{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
 .sum4 div{display:flex;justify-content:space-between;align-items:baseline}
 .sum4 small{color:var(--sub);font-size:12px}
@@ -190,12 +193,14 @@ const PAL=['#F58FA8','#7DB3E8','#F6B756','#7FCDBB','#A796E8','#F2927C','#8FC47A'
 /* ───────── 데이터 ───────── */
 const KEY='taerin-v1';
 const DEF={v:1,pin:null,me:null,tx:[],fixed:[],catsUpd:0,
-  cats:{out:['식비','생활용품','교통','주거·관리비','통신','보험','의료','경조사','문화·여가','쇼핑','기타'],in:['월급','부수입','용돈','기타'],acct:['현금','국민은행','신한은행','우리은행','카카오뱅크','토스뱅크','신용카드'],save:['적금','예금','청약','투자','연금','비상금']}};
+  cats:{out:['식비','생활용품','교통','주거·관리비','통신','보험','의료','경조사','문화·여가','쇼핑','기타'],in:['월급','부수입','용돈','기타'],acct:['현금','국민은행','신한은행','우리은행','카카오뱅크','토스뱅크','신용카드'],save:['적금','예금','청약','투자','연금','비상금'],gift:['기프티콘','백화점상품권','문화상품권','지역화폐','기타']}};
 let S=load();
-['acct','save'].forEach(k=>{if(!Array.isArray(S.cats[k])||!S.cats[k].length)S.cats[k]=DEF.cats[k].slice()});
+['acct','save','gift'].forEach(k=>{if(!Array.isArray(S.cats[k])||!S.cats[k].length)S.cats[k]=DEF.cats[k].slice()});
 /* 저축(적금·예금 등)은 나가는 돈이지만 지출과 따로 센다 */
-const isSave=t=>t.type==='out'&&t.kind==='save',isOut=t=>t.type==='out'&&t.kind!=='save';
-const TYN={out:'지출',in:'수입',save:'저축'};
+/* 상품권·기프티콘(받음/사용)은 수입·지출에 넣지 않고 따로 센다 */
+const isGift=t=>t.kind==='gift',isIn=t=>t.type==='in'&&t.kind!=='gift';
+const isSave=t=>t.type==='out'&&t.kind==='save',isOut=t=>t.type==='out'&&t.kind!=='save'&&t.kind!=='gift';
+const TYN={out:'지출',in:'수입',save:'저축',gift:'상품권 사용'};
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.v)return Object.assign({},JSON.parse(JSON.stringify(DEF)),s)}catch(e){}return JSON.parse(JSON.stringify(DEF))}
 function store(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert('저장 공간이 부족해요')}}
 function save(){store();schedulePush()}
@@ -258,9 +263,12 @@ function render(){
 function whoLabel(){return ui.who==='all'?'둘이 합쳐':P[ui.who].name+'님은'}
 function vBook(){
   const tx=monthTx(ui.ym,ui.who);
-  const inc=sumOf(tx,t=>t.type==='in'),out=sumOf(tx,isOut),sv=sumOf(tx,isSave);
+  const inc=sumOf(tx,isIn),out=sumOf(tx,isOut),sv=sumOf(tx,isSave);
   const fx=sumOf(tx,t=>t.type==='out'&&t.kind==='fixed'),ex=out-fx;
   let h='<div class="card sum4"><div><small>수입</small><b class="in num">'+won(inc)+'</b></div><div><small>지출</small><b class="out num">'+won(out)+'</b></div><div><small>저축</small><b class="sv num">'+won(sv)+'</b></div><div><small>남은 돈</small><b class="num">'+won(inc-out-sv)+'</b></div></div>';
+  const gAll=S.tx.filter(t=>!t.del&&isGift(t)&&(ui.who==='all'||t.who===ui.who));
+  if(gAll.length){const bal=sumOf(gAll,x=>x.type==='in')-sumOf(gAll,x=>x.type==='out'),gi=sumOf(tx,x=>isGift(x)&&x.type==='in'),go=sumOf(tx,x=>isGift(x)&&x.type==='out');
+    h+='<div class="gbar"><b>🎁 상품권 남은 금액 <span class="num">'+won(bal)+'</span></b><span>이번 달 받음 '+won(gi)+' · 사용 '+won(go)+'</span></div>'}
   h+='<div class="bubble">'+(ui.who==='yr'?CH.yr:CH.tw)+'<div>'+(tx.length?
     '이번 달 '+whoLabel()+' <b class="out">'+won(out)+'</b> 썼어요.<br><span class="sub">매달 고정 '+won(fx)+' · 추가 지출 '+won(ex)+(sv?' · 저축 '+won(sv):'')+'</span>':
     '아직 기록이 없어요. 아래 <b>+</b> 버튼으로 적어 볼까요?')+'</div></div>';
@@ -274,14 +282,14 @@ function dayCards(tx,showEmpty){
   const by={};tx.forEach(t=>(by[t.date]=by[t.date]||[]).push(t));
   return Object.keys(by).sort().reverse().map(d=>{
     const a=by[d].sort((x,y)=>y.upd-x.upd),dt=new Date(d+'T00:00:00'),w=dt.getDay();
-    const i=sumOf(a,t=>t.type==='in'),o=sumOf(a,isOut),v=sumOf(a,isSave);
+    const i=sumOf(a,isIn),o=sumOf(a,isOut),v=sumOf(a,isSave);
     return '<div class="card day"><div class="day-h"><span class="d">'+Number(d.slice(8))+'</span><span class="w '+(w===0?'sun':w===6?'sat':'')+'">'+'일월화수목금토'[w]+'요일</span><span class="t">'+(i?'<span class="in num">+'+won(i)+'</span>':'')+(o?'<span class="out num">-'+won(o)+'</span>':'')+(v?'<span class="sv num">저축 '+won(v)+'</span>':'')+'</span></div>'+
-      a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||t.cat)+(t.type==='out'&&(t.kind==='fixed'||t.id.startsWith('fx-'))?'<span class="tag">매달</span>':'')+(isSave(t)?'<span class="tag">저축</span>':'')+'</b><small>'+P[t.who].name+' · '+esc(t.cat)+(t.acct?' · '+esc(t.acct):'')+(t.memo?' · '+esc(t.memo):'')+'</small></span><span class="amt num '+(isSave(t)?'sv':t.type)+'">'+(t.type==='in'?'+':'-')+won(t.amount)+'</span></button>').join('')+'</div>';
+      a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||t.cat)+(t.type==='out'&&(t.kind==='fixed'||t.id.startsWith('fx-'))?'<span class="tag">매달</span>':'')+(isSave(t)?'<span class="tag">저축</span>':'')+(isGift(t)?'<span class="tag gft">상품권 '+(t.type==='in'?'받음':'사용')+'</span>':'')+'</b><small>'+P[t.who].name+' · '+esc(t.cat)+(t.acct?' · '+esc(t.acct):'')+(t.memo?' · '+esc(t.memo):'')+'</small></span><span class="amt num '+(isGift(t)?'gf':isSave(t)?'sv':t.type)+'">'+(t.type==='in'?'+':'-')+won(t.amount)+'</span></button>').join('')+'</div>';
   }).join('');
 }
 function calendar(tx){
   const[y,m]=ui.ym.split('-').map(Number),first=new Date(y,m-1,1).getDay(),n=lastDay(ui.ym),td=todayStr();
-  const by={};tx.forEach(t=>{const o=by[t.date]=by[t.date]||{in:0,out:0,sv:0};o[isSave(t)?'sv':t.type]+=t.amount});
+  const by={};tx.forEach(t=>{const o=by[t.date]=by[t.date]||{in:0,out:0,sv:0,gf:0};o[isGift(t)?'gf':isSave(t)?'sv':t.type]+=t.amount});
   let h='<div class="card"><div class="cal">'+[...'일월화수목금토'].map(c=>'<div class="wd">'+c+'</div>').join('');
   for(let i=0;i<first;i++)h+='<span></span>';
   for(let d=1;d<=n;d++){const ds=ui.ym+'-'+pad2(d),w=(first+d-1)%7,o=by[ds];
@@ -291,12 +299,12 @@ function calendar(tx){
 
 function vStat(){
   const all=monthTx(ui.ym,'all'),tx=monthTx(ui.ym,ui.who),ty=ui.statType;
-  let h='<div class="who2">'+WHO.map(w=>{const a=all.filter(t=>t.who===w),i=sumOf(a,t=>t.type==='in'),o=sumOf(a,isOut),v=sumOf(a,isSave);
+  let h='<div class="who2">'+WHO.map(w=>{const a=all.filter(t=>t.who===w),i=sumOf(a,isIn),o=sumOf(a,isOut),v=sumOf(a,isSave);
     return '<div class="card"><div class="hd">'+CH[w]+P[w].name+'</div><p><span class="sub">수입</span><b class="in num">'+won(i)+'</b></p><p><span class="sub">지출</span><b class="out num">'+won(o)+'</b></p><p><span class="sub">저축</span><b class="sv num">'+won(v)+'</b></p><p><span class="sub">남은 돈</span><b class="num">'+won(i-o-v)+'</b></p></div>'}).join('')+'</div>';
   const out=sumOf(tx,isOut),fx=sumOf(tx,t=>t.type==='out'&&t.kind==='fixed'),ex=out-fx;
   h+='<div class="card"><h2>매달 고정 vs 추가 지출 <small class="sub" style="font-family:inherit;font-size:12px">'+(ui.who==='all'?'합계':P[ui.who].name)+'</small></h2><div class="split"><span style="width:'+(out?fx/out*100:0)+'%;background:var(--sum)"></span><span style="width:'+(out?ex/out*100:0)+'%;background:var(--out)"></span></div><div class="legend"><span><b style="color:var(--sum-d)">●</b> 매달 고정 <b class="num">'+won(fx)+'</b></span><span><b class="out">●</b> 추가 <b class="num">'+won(ex)+'</b></span></div></div>';
-  h+='<div class="seg"><button class="'+(ty==='out'?'on':'')+'" data-act="stype" data-k="out">지출</button><button class="'+(ty==='save'?'on':'')+'" data-act="stype" data-k="save">저축</button><button class="'+(ty==='in'?'on':'')+'" data-act="stype" data-k="in">수입</button></div>';
-  const list=tx.filter(ty==='save'?isSave:ty==='out'?isOut:t=>t.type==='in'),tot=sumOf(list,()=>true),g={};
+  h+='<div class="seg"><button class="'+(ty==='out'?'on':'')+'" data-act="stype" data-k="out">지출</button><button class="'+(ty==='save'?'on':'')+'" data-act="stype" data-k="save">저축</button><button class="'+(ty==='gift'?'on':'')+'" data-act="stype" data-k="gift">상품권</button><button class="'+(ty==='in'?'on':'')+'" data-act="stype" data-k="in">수입</button></div>';
+  const list=tx.filter(ty==='gift'?(x=>isGift(x)&&x.type==='out'):ty==='save'?isSave:ty==='out'?isOut:isIn),tot=sumOf(list,()=>true),g={};
   list.forEach(t=>(g[t.cat]=g[t.cat]||[]).push(t));
   const cats=Object.keys(g).map(c=>({c,a:g[c],s:sumOf(g[c],()=>true)})).sort((a,b)=>b.s-a.s);
   if(!cats.length)return h+'<div class="empty">'+CH.tw+'<div>이 달엔 '+TYN[ty]+' 기록이 없어요</div></div>';
@@ -314,6 +322,7 @@ function vStat(){
     }
   });
   const ag={};list.forEach(t=>{const k=t.acct||'(선택 안 함)';ag[k]=(ag[k]||0)+t.amount});
+  if(ty==='gift')return h+'</div>';
   h+='</div><div class="card"><h2>은행·카드별 '+TYN[ty]+'</h2>'+Object.keys(ag).sort((a,b)=>ag[b]-ag[a]).map(k=>'<div class="cat"><span class="pc" style="background:'+(k[0]==='('?'#B0A8B9':catColor('acct',k))+'">'+Math.round(ag[k]/tot*100)+'%</span><span class="nm">'+esc(k)+'</span><b class="num">'+won(ag[k])+'</b></div>').join('');
   return h+'</div>';
 }
@@ -327,7 +336,7 @@ function vFix(){
 
 function vSet(){
   return '<div class="set"><div class="card"><h2>우리 둘</h2><button class="li" data-act="swap"><span>이 폰의 주인</span><em>'+P[S.me].name+' ('+P[S.me].pet+') ›</em></button></div>'+
-  '<div class="card"><h2>분류 · 은행</h2><button class="li" data-act="cats" data-k="out"><span>지출 분류 관리</span><em>'+S.cats.out.length+'개 ›</em></button><button class="li" data-act="cats" data-k="in"><span>수입 분류 관리</span><em>'+S.cats.in.length+'개 ›</em></button><button class="li" data-act="cats" data-k="save"><span>저축 분류 관리</span><em>'+S.cats.save.length+'개 ›</em></button><button class="li" data-act="cats" data-k="acct"><span>은행·카드 관리</span><em>'+S.cats.acct.length+'개 ›</em></button></div>'+
+  '<div class="card"><h2>분류 · 은행</h2><button class="li" data-act="cats" data-k="out"><span>지출 분류 관리</span><em>'+S.cats.out.length+'개 ›</em></button><button class="li" data-act="cats" data-k="in"><span>수입 분류 관리</span><em>'+S.cats.in.length+'개 ›</em></button><button class="li" data-act="cats" data-k="save"><span>저축 분류 관리</span><em>'+S.cats.save.length+'개 ›</em></button><button class="li" data-act="cats" data-k="gift"><span>상품권 종류 관리</span><em>'+S.cats.gift.length+'개 ›</em></button><button class="li" data-act="cats" data-k="acct"><span>은행·카드 관리</span><em>'+S.cats.acct.length+'개 ›</em></button></div>'+
   '<div class="card"><h2>둘이 실시간 동기화</h2>'+(SY?
     '<button class="li" data-act="synccode"><span>상태</span><em>'+syBadge()+'</em></button><button class="li" data-act="synccode"><span>상대 폰 연결하기 (연결 링크 보내기)</span><em>›</em></button><button class="li" data-act="syncoff"><span>동기화 끊기</span><em>›</em></button><p class="note">한 사람이 적으면 상대 폰에도 바로 나타나요. 인터넷이 없을 때 적은 기록은 다시 연결되면 자동으로 올라가요.</p>':
     '<button class="li" data-act="syncnew"><span>처음 만들기 (한 사람만)</span><em>›</em></button><button class="li" data-act="syncjoin"><span>받은 연결 코드로 합류하기</span><em>›</em></button><p class="note">한 사람이 “처음 만들기”를 하고 연결 링크를 상대에게 보내면, 두 폰이 같은 가계부를 함께 써요.</p>')+'</div>'+
@@ -346,10 +355,11 @@ function renderSheet(){
   let b='';
   if(sheetKind==='tx'){
     b='<div class="sh"><h2>'+(form.id?'내역 고치기':'새 내역')+'</h2><button data-act="close" aria-label="닫기">✕</button></div>'+
-    '<div class="seg"><button class="'+(form.type==='out'?'on':'')+'" data-act="fset" data-f="type" data-v="out">지출</button><button class="'+(form.type==='in'?'on':'')+'" data-act="fset" data-f="type" data-v="in">수입</button></div>'+whoSeg()+
+    '<div class="seg"><button class="'+(form.type==='out'?'on':'')+'" data-act="fset" data-f="type" data-v="out">지출</button><button class="'+(form.type==='in'?'on':'')+'" data-act="fset" data-f="type" data-v="in">수입</button><button class="'+(form.type==='gift'?'on':'')+'" data-act="fset" data-f="type" data-v="gift">상품권</button></div>'+
+    (form.type==='gift'?'<div class="seg"><button class="'+(form.gdir==='in'?'on':'')+'" data-act="fset" data-f="gdir" data-v="in">받았어요</button><button class="'+(form.gdir==='out'?'on':'')+'" data-act="fset" data-f="gdir" data-v="out">썼어요</button></div>':'')+whoSeg()+
     '<label class="f"><span>금액</span><input class="big" data-f="amount" inputmode="numeric" placeholder="0" value="'+esc(form.amount)+'"></label>'+
-    '<label class="f"><span>날짜</span><input type="date" data-f="date" value="'+form.date+'"></label>'+catChips(form.type==='out'&&form.kind==='save'?'save':form.type)+acctChips(form.type==='out'?'어디 은행·카드에서 나갔나요':'어디 은행으로 들어왔나요')+
-    '<label class="f"><span>'+(form.type==='out'&&form.kind!=='save'?'어디서 썼나요':'내용')+'</span><input data-f="place" maxlength="30" placeholder="'+(form.type==='out'?'예: 이마트, 스타벅스':'예: 11월 월급')+'" value="'+esc(form.place)+'"></label>'+
+    '<label class="f"><span>날짜</span><input type="date" data-f="date" value="'+form.date+'"></label>'+catChips(form.type==='out'&&form.kind==='save'?'save':form.type)+(form.type==='gift'?'':acctChips(form.type==='out'?'어디 은행·카드에서 나갔나요':'어디 은행으로 들어왔나요'))+
+    '<label class="f"><span>'+(form.type==='out'&&form.kind!=='save'?'어디서 썼나요':'내용')+'</span><input data-f="place" maxlength="30" placeholder="'+(form.type==='gift'?'예: 스타벅스 기프티콘':form.type==='out'?'예: 이마트, 스타벅스':'예: 11월 월급')+'" value="'+esc(form.place)+'"></label>'+
     (form.type==='out'?'<div class="flabel">지출 종류</div><div class="seg"><button class="'+(form.kind==='extra'?'on':'')+'" data-act="fset" data-f="kind" data-v="extra">추가 지출</button><button class="'+(form.kind==='fixed'?'on':'')+'" data-act="fset" data-f="kind" data-v="fixed">매달 고정</button><button class="'+(form.kind==='save'?'on':'')+'" data-act="fset" data-f="kind" data-v="save">저축</button></div>':'')+
     '<label class="f"><span>메모 (선택)</span><input data-f="memo" maxlength="40" value="'+esc(form.memo)+'"></label>'+
     '<div class="btns">'+(form.id?'<button class="btn ghost" data-act="deltx">삭제</button>':'')+'<button class="btn" data-act="savetx">저장</button></div>';
@@ -361,7 +371,7 @@ function renderSheet(){
     '<label class="f"><span>매달 며칠에 나가나요</span><input data-f="day" inputmode="numeric" maxlength="2" value="'+esc(form.day)+'"></label>'+catChips(form.save?'save':'out')+acctChips('어디 은행·카드에서 나가나요')+
     '<div class="btns">'+(form.id?'<button class="btn ghost" data-act="delfix">삭제</button>':'')+'<button class="btn" data-act="savefix">저장</button></div>';
   }else if(sheetKind==='cats'){
-    b='<div class="sh"><h2>'+({out:'지출 분류',in:'수입 분류',acct:'은행·카드',save:'저축 분류'})[catType]+' 관리</h2><button data-act="close" aria-label="닫기">✕</button></div><div class="cats">'+
+    b='<div class="sh"><h2>'+({out:'지출 분류',in:'수입 분류',acct:'은행·카드',save:'저축 분류',gift:'상품권 종류'})[catType]+' 관리</h2><button data-act="close" aria-label="닫기">✕</button></div><div class="cats">'+
     S.cats[catType].map(c=>'<button data-act="delcat" data-v="'+esc(c)+'">'+esc(c)+'<span class="x">✕</span></button>').join('')+'</div>'+
     '<label class="f"><span>새로 추가</span><input id="newcat" maxlength="10" placeholder="'+(catType==='acct'?'예: 농협, 현대카드':'예: 반려동물')+'"></label><div class="btns"><button class="btn" data-act="addcat">추가</button></div><p class="note">지워도 이미 적은 기록은 그대로 남아요.</p>';
   }else if(sheetKind==='syncnew'){
@@ -403,16 +413,17 @@ document.addEventListener('click',e=>{
     case 'add':{const td=todayStr();
       form={type:'out',who:ui.who==='all'?S.me:ui.who,amount:'',date:ui.view==='cal'&&ui.selDay?ui.selDay:(td.slice(0,7)===ui.ym?td:ui.ym+'-01'),cat:S.cats.out[0],place:'',kind:'extra',memo:''};form.acct=lastAcct(form.who);
       return openSheet('tx')}
-    case 'edit':{const t=S.tx.find(x=>x.id===d.id);form=Object.assign({},t,{amount:t.amount.toLocaleString('ko-KR')});return openSheet('tx')}
+    case 'edit':{const t=S.tx.find(x=>x.id===d.id);form=Object.assign({},t,{amount:t.amount.toLocaleString('ko-KR')});if(t.kind==='gift'){form.gdir=t.type;form.type='gift'}return openSheet('tx')}
     case 'addfix':form={name:'',amount:'',who:S.me,day:'1',cat:S.cats.out[0],acct:'',save:''};return openSheet('fix');
     case 'editfix':{const f=S.fixed.find(x=>x.id===d.id);form=Object.assign({},f,{amount:f.amount.toLocaleString('ko-KR'),day:String(f.day)});return openSheet('fix')}
     case 'close':return closeSheet();
     case 'newacct':{const v=(prompt('추가할 은행·카드 이름')||'').trim().slice(0,10);if(!v)return;if(!S.cats.acct.includes(v)){S.cats.acct.push(v);S.catsUpd=Date.now();save()}form.acct=v;return renderSheet()}
-    case 'fset':form[d.f]=(d.f==='acct'&&form.acct===d.v)?'':d.v;if(d.f==='type'){form.cat=S.cats[d.v][0];form.kind='extra'}
+    case 'fset':form[d.f]=(d.f==='acct'&&form.acct===d.v)?'':d.v;if(d.f==='type'){form.cat=S.cats[d.v][0];form.kind='extra';form.gdir=form.gdir||'in'}
       if(d.f==='kind'){const k=d.v==='save'?'save':'out';if(!S.cats[k].includes(form.cat))form.cat=S.cats[k][0]}
       if(d.f==='save')form.cat=S.cats[d.v?'save':'out'][0];return renderSheet();
     case 'savetx':{const n=toNum(form.amount);if(!n)return alert('금액을 적어 주세요');if(!form.date)return alert('날짜를 골라 주세요');
-      const t={id:form.id||uid(),type:form.type,who:form.who,amount:n,date:form.date,cat:form.cat,acct:form.acct||'',place:(form.place||'').trim(),memo:(form.memo||'').trim(),kind:form.type==='out'?form.kind:'extra',upd:Date.now()};
+      const gf=form.type==='gift';
+      const t={id:form.id||uid(),type:gf?form.gdir:form.type,who:form.who,amount:n,date:form.date,cat:form.cat,acct:gf?'':form.acct||'',place:(form.place||'').trim(),memo:(form.memo||'').trim(),kind:gf?'gift':form.type==='out'?form.kind:'extra',upd:Date.now()};
       const i=S.tx.findIndex(x=>x.id===t.id);if(i>=0)S.tx[i]=t;else S.tx.push(t);
       save();ui.ym=t.date.slice(0,7);if(ui.view==='cal')ui.selDay=t.date;closeSheet();break}
     case 'deltx':{if(!confirm('이 내역을 지울까요?'))return;const t=S.tx.find(x=>x.id===form.id);t.del=true;t.upd=Date.now();save();closeSheet();break}
@@ -472,7 +483,7 @@ document.addEventListener('change',async e=>{
     const[tx,n1]=mergeArr(S.tx,d.tx.filter(okTx));
     const[fx,n2]=mergeArr(S.fixed,(d.fixed||[]).filter(okFix));
     S.tx=tx;S.fixed=fx;
-    ['out','in','acct','save'].forEach(k=>((d.cats||{})[k]||[]).forEach(c=>{if(typeof c==='string'&&!S.cats[k].includes(c))S.cats[k].push(c.slice(0,10))}));
+    ['out','in','acct','save','gift'].forEach(k=>((d.cats||{})[k]||[]).forEach(c=>{if(typeof c==='string'&&!S.cats[k].includes(c))S.cats[k].push(c.slice(0,10))}));
     save();render();alert('합치기 완료! 새로 반영된 기록 '+(n1+n2)+'건');
   }catch(_){alert('태린 가계부에서 내보낸 파일이 아니에요')}
   e.target.value='';
@@ -538,9 +549,9 @@ function pull(){
   });
   const rc=mirror.cats,strs=a=>Array.isArray(a)?a.filter(s=>typeof s==='string'&&s).map(s=>s.slice(0,10)):[];
   if(rc&&typeof rc.upd==='number'){
-    const o=strs(rc.out),n=strs(rc.in),a=strs(rc.acct),v=strs(rc.save);
+    const o=strs(rc.out),n=strs(rc.in),a=strs(rc.acct),v=strs(rc.save),g=strs(rc.gift);
     if(o.length&&n.length){
-      if(rc.upd>(S.catsUpd||0)){S.cats={out:o,in:n,acct:a.length?a:S.cats.acct,save:v.length?v:S.cats.save};S.catsUpd=rc.upd;ch=true}
+      if(rc.upd>(S.catsUpd||0)){S.cats={out:o,in:n,acct:a.length?a:S.cats.acct,save:v.length?v:S.cats.save,gift:g.length?g:S.cats.gift};S.catsUpd=rc.upd;ch=true}
       if(rc.upd>=(S.catsUpd||0))synced.cats=rc.upd;
     }
   }
@@ -552,7 +563,7 @@ async function push(){
   if(!SY||pushing||!gotSnap)return;
   const body={},marks={};
   ['tx','fixed'].forEach(k=>S[k].forEach(o=>{const key=k+'/'+o.id;if((o.upd||0)>(synced[key]||0)&&/^[\w-]{1,80}$/.test(o.id)){body[key]=o;marks[key]=o.upd}}));
-  if((S.catsUpd||0)>(synced.cats||0)){body.cats={out:S.cats.out,in:S.cats.in,acct:S.cats.acct,save:S.cats.save,upd:S.catsUpd};marks.cats=S.catsUpd}
+  if((S.catsUpd||0)>(synced.cats||0)){body.cats={out:S.cats.out,in:S.cats.in,acct:S.cats.acct,save:S.cats.save,gift:S.cats.gift,upd:S.catsUpd};marks.cats=S.catsUpd}
   if(!Object.keys(body).length)return;
   pushing=true;const mine=SY;
   try{
