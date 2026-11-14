@@ -316,7 +316,7 @@ function vFix(){
 }
 
 function vSet(){
-  return '<div class="set"><div class="card"><h2>우리 둘</h2><button class="li" data-act="swap"><span>이 폰의 주인</span><em>'+P[S.me].name+' ('+P[S.me].pet+') ›</em></button><button class="li" data-act="repin"><span>비밀번호 바꾸기</span><em>›</em></button><button class="li" data-act="lockn"><span>지금 잠그기</span><em>›</em></button></div>'+
+  return '<div class="set"><div class="card"><h2>우리 둘</h2><button class="li" data-act="swap"><span>이 폰의 주인</span><em>'+P[S.me].name+' ('+P[S.me].pet+') ›</em></button></div>'+
   '<div class="card"><h2>분류</h2><button class="li" data-act="cats" data-k="out"><span>지출 분류 관리</span><em>'+S.cats.out.length+'개 ›</em></button><button class="li" data-act="cats" data-k="in"><span>수입 분류 관리</span><em>'+S.cats.in.length+'개 ›</em></button></div>'+
   '<div class="card"><h2>둘이 실시간 동기화</h2>'+(SY?
     '<button class="li" data-act="synccode"><span>상태</span><em>'+syBadge()+'</em></button><button class="li" data-act="synccode"><span>상대 폰 연결하기 (연결 링크 보내기)</span><em>›</em></button><button class="li" data-act="syncoff"><span>동기화 끊기</span><em>›</em></button><p class="note">한 사람이 적으면 상대 폰에도 바로 나타나요. 인터넷이 없을 때 적은 기록은 다시 연결되면 자동으로 올라가요.</p>':
@@ -597,9 +597,8 @@ function unlock(){lock=null;try{sessionStorage.setItem(KEY+'-open','1')}catch(_)
 /* ───────── 시작 ───────── */
 (function start(){
   let open=false;try{open=sessionStorage.getItem(KEY+'-open')==='1'}catch(_){}
-  if(!S.pin)lock={mode:'set1',buf:'',first:''};
-  else if(!S.me)lock={mode:'who',buf:''};
-  else if(!open)lock={mode:'enter',buf:''};
+  /* 비밀번호 잠금은 사용하지 않음: 처음 한 번 누구 폰인지만 고른다 */
+  if(!S.me)lock={mode:'who',buf:''};
   renderLock();
   if(!lock){render();checkJoinLink()}
   if(SY)syncStart();
