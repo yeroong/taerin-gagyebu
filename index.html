@@ -193,9 +193,11 @@ const PAL=['#F58FA8','#7DB3E8','#F6B756','#7FCDBB','#A796E8','#F2927C','#8FC47A'
 /* ───────── 데이터 ───────── */
 const KEY='taerin-v1';
 const DEF={v:1,pin:null,me:null,tx:[],fixed:[],catsUpd:0,
-  cats:{out:['식비','생활용품','교통','주거·관리비','통신','보험','의료','경조사','문화·여가','쇼핑','기타'],in:['월급','부수입','용돈','기타'],acct:['현금','국민은행','신한은행','우리은행','카카오뱅크','토스뱅크','신용카드'],save:['적금','예금','청약','투자','연금','비상금'],gift:['기프티콘','백화점상품권','문화상품권','지역화폐','기타']}};
+  cats:{out:['식비','생활용품','교통','주거·관리비','통신','보험','의료','경조사','계비','문화·여가','쇼핑','기타'],in:['월급','부수입','용돈','기타'],acct:['현금','국민은행','신한은행','우리은행','카카오뱅크','토스뱅크','신용카드'],save:['적금','예금','청약','투자','연금','비상금'],gift:['기프티콘','백화점상품권','문화상품권','지역화폐','기타']}};
 let S=load();
 ['acct','save','gift'].forEach(k=>{if(!Array.isArray(S.cats[k])||!S.cats[k].length)S.cats[k]=DEF.cats[k].slice()});
+/* 이미 쓰던 폰에도 새 기본 분류(계비)를 한 번만 넣어 준다 */
+if(!S.m1){if(!S.cats.out.includes('계비')){const i=S.cats.out.indexOf('기타');S.cats.out.splice(i<0?S.cats.out.length:i,0,'계비')}S.m1=1;store()}
 /* 저축(적금·예금 등)은 나가는 돈이지만 지출과 따로 센다 */
 /* 상품권·기프티콘(받음/사용)은 수입·지출에 넣지 않고 따로 센다 */
 const isGift=t=>t.kind==='gift',isIn=t=>t.type==='in'&&t.kind!=='gift';
@@ -234,7 +236,7 @@ function monthTx(ym,who){return S.tx.filter(t=>!t.del&&t.date.slice(0,7)===ym&&(
 const sumOf=(a,f)=>a.reduce((s,t)=>s+(f(t)?t.amount:0),0);
 
 /* ───────── 화면 상태 ───────── */
-const ui={tab:'book',who:'all',ym:todayStr().slice(0,7),view:'list',selDay:null,statType:'out',openCat:null};
+const ui={tab:'book',who:'all',ym:todayStr().slice(0,7),view:'cal',selDay:todayStr(),statType:'out',openCat:null};
 let form=null,sheetKind=null,catType='out';
 const $=s=>document.querySelector(s);
 
@@ -272,7 +274,7 @@ function vBook(){
   h+='<div class="bubble">'+(ui.who==='yr'?CH.yr:CH.tw)+'<div>'+(tx.length?
     '이번 달 '+whoLabel()+' <b class="out">'+won(out)+'</b> 썼어요.<br><span class="sub">매달 고정 '+won(fx)+' · 추가 지출 '+won(ex)+(sv?' · 저축 '+won(sv):'')+'</span>':
     '아직 기록이 없어요. 아래 <b>+</b> 버튼으로 적어 볼까요?')+'</div></div>';
-  h+='<div class="seg"><button class="'+(ui.view==='list'?'on':'')+'" data-act="view" data-k="list">일일</button><button class="'+(ui.view==='cal'?'on':'')+'" data-act="view" data-k="cal">달력</button></div>';
+  h+='<div class="seg"><button class="'+(ui.view==='cal'?'on':'')+'" data-act="view" data-k="cal">달력</button><button class="'+(ui.view==='list'?'on':'')+'" data-act="view" data-k="list">일일</button></div>';
   if(ui.view==='cal'){h+=calendar(tx);h+=dayCards(ui.selDay?tx.filter(t=>t.date===ui.selDay):[],!!ui.selDay)}
   else h+=dayCards(tx,true);
   return h;
@@ -349,6 +351,12 @@ function openSheet(kind){sheetKind=kind;renderSheet()}
 function closeSheet(){sheetKind=null;form=null;$('#sheet').innerHTML=''}
 function whoSeg(){return '<div class="flabel">누가</div><div class="seg">'+WHO.map(w=>'<button class="'+(form.who===w?'on':'')+'" data-act="fset" data-f="who" data-v="'+w+'">'+CH[w]+P[w].name+'</button>').join('')+'</div>'}
 function catChips(type){return '<div class="flabel">분류</div><div class="cats">'+S.cats[type].map(c=>'<button class="'+(form.cat===c?'on':'')+'" data-act="fset" data-f="cat" data-v="'+esc(c)+'">'+esc(c)+'</button>').join('')+'</div>'}
+const REPNOTE='<p class="note" style="margin:-6px 4px 12px">저장하면 매달 같은 날 자동으로 적혀요. 다음 달부터 따로 적지 않아도 돼요.</p>';
+function repBlock(){
+  if(form.id&&form.id.startsWith('fx-'))return '<p class="note" style="margin:-6px 4px 12px">매달 자동으로 적히는 항목이에요. 앞으로의 금액을 바꾸려면 고정지출 탭에서 고쳐 주세요.</p>';
+  if(form.kind==='save')return '<div class="seg"><button class="'+(form.rep?'':'on')+'" data-act="fset" data-f="rep" data-v="">이번만</button><button class="'+(form.rep?'on':'')+'" data-act="fset" data-f="rep" data-v="y">매달 고정</button></div>'+(form.rep?REPNOTE:'');
+  return form.kind==='fixed'?REPNOTE:'';
+}
 function acctChips(label){return '<div class="flabel">'+label+'</div><div class="cats">'+S.cats.acct.map(c=>'<button class="'+(form.acct===c?'on':'')+'" data-act="fset" data-f="acct" data-v="'+esc(c)+'">'+esc(c)+'</button>').join('')+'<button data-act="newacct">+ 추가</button></div>'}
 function lastAcct(who){const a=S.tx.filter(t=>!t.del&&t.who===who&&t.acct&&S.cats.acct.includes(t.acct)).sort((x,y)=>y.upd-x.upd)[0];return a?a.acct:''}
 function renderSheet(){
@@ -356,11 +364,11 @@ function renderSheet(){
   if(sheetKind==='tx'){
     b='<div class="sh"><h2>'+(form.id?'내역 고치기':'새 내역')+'</h2><button data-act="close" aria-label="닫기">✕</button></div>'+
     '<div class="seg"><button class="'+(form.type==='out'?'on':'')+'" data-act="fset" data-f="type" data-v="out">지출</button><button class="'+(form.type==='in'?'on':'')+'" data-act="fset" data-f="type" data-v="in">수입</button><button class="'+(form.type==='gift'?'on':'')+'" data-act="fset" data-f="type" data-v="gift">상품권</button></div>'+
-    (form.type==='gift'?'<div class="seg"><button class="'+(form.gdir==='in'?'on':'')+'" data-act="fset" data-f="gdir" data-v="in">받았어요</button><button class="'+(form.gdir==='out'?'on':'')+'" data-act="fset" data-f="gdir" data-v="out">썼어요</button></div>':'')+whoSeg()+
+    (form.type==='gift'?'<div class="seg"><button class="'+(form.gdir==='in'?'on':'')+'" data-act="fset" data-f="gdir" data-v="in">받았어요</button><button class="'+(form.gdir==='out'?'on':'')+'" data-act="fset" data-f="gdir" data-v="out">썼어요</button></div>':'')+
+    (form.type==='out'?'<div class="flabel">지출 종류</div><div class="seg"><button class="'+(form.kind==='extra'?'on':'')+'" data-act="fset" data-f="kind" data-v="extra">추가 지출</button><button class="'+(form.kind==='fixed'?'on':'')+'" data-act="fset" data-f="kind" data-v="fixed">매달 고정</button><button class="'+(form.kind==='save'?'on':'')+'" data-act="fset" data-f="kind" data-v="save">저축</button></div>'+repBlock():'')+whoSeg()+
     '<label class="f"><span>금액</span><input class="big" data-f="amount" inputmode="numeric" placeholder="0" value="'+esc(form.amount)+'"></label>'+
     '<label class="f"><span>날짜</span><input type="date" data-f="date" value="'+form.date+'"></label>'+catChips(form.type==='out'&&form.kind==='save'?'save':form.type)+(form.type==='gift'?'':acctChips(form.type==='out'?'어디 은행·카드에서 나갔나요':'어디 은행으로 들어왔나요'))+
     '<label class="f"><span>'+(form.type==='out'&&form.kind!=='save'?'어디서 썼나요':'내용')+'</span><input data-f="place" maxlength="30" placeholder="'+(form.type==='gift'?'예: 스타벅스 기프티콘':form.type==='out'?'예: 이마트, 스타벅스':'예: 11월 월급')+'" value="'+esc(form.place)+'"></label>'+
-    (form.type==='out'?'<div class="flabel">지출 종류</div><div class="seg"><button class="'+(form.kind==='extra'?'on':'')+'" data-act="fset" data-f="kind" data-v="extra">추가 지출</button><button class="'+(form.kind==='fixed'?'on':'')+'" data-act="fset" data-f="kind" data-v="fixed">매달 고정</button><button class="'+(form.kind==='save'?'on':'')+'" data-act="fset" data-f="kind" data-v="save">저축</button></div>':'')+
     '<label class="f"><span>메모 (선택)</span><input data-f="memo" maxlength="40" value="'+esc(form.memo)+'"></label>'+
     '<div class="btns">'+(form.id?'<button class="btn ghost" data-act="deltx">삭제</button>':'')+'<button class="btn" data-act="savetx">저장</button></div>';
   }else if(sheetKind==='fix'){
@@ -424,6 +432,12 @@ document.addEventListener('click',e=>{
     case 'savetx':{const n=toNum(form.amount);if(!n)return alert('금액을 적어 주세요');if(!form.date)return alert('날짜를 골라 주세요');
       const gf=form.type==='gift';
       const t={id:form.id||uid(),type:gf?form.gdir:form.type,who:form.who,amount:n,date:form.date,cat:form.cat,acct:gf?'':form.acct||'',place:(form.place||'').trim(),memo:(form.memo||'').trim(),kind:gf?'gift':form.type==='out'?form.kind:'extra',upd:Date.now()};
+      /* 매달 고정(지출·저축)으로 적으면 고정지출에도 등록해 다음 달부터 자동으로 적히게 한다 */
+      if(t.type==='out'&&!gf&&(t.kind==='fixed'||(t.kind==='save'&&form.rep))&&!t.id.startsWith('fx-')){
+        const old=S.tx.find(x=>x.id===t.id);if(old){old.del=true;old.upd=Date.now()}
+        const ym=t.date.slice(0,7),fxd={id:uid(),name:t.place||t.cat,amount:n,who:t.who,day:Number(t.date.slice(8)),cat:t.cat,acct:t.acct,save:t.kind==='save',start:ym,upd:Date.now()};
+        S.fixed.push(fxd);t.id='fx-'+fxd.id+'-'+ym;if(!t.place)t.place=fxd.name;
+      }
       const i=S.tx.findIndex(x=>x.id===t.id);if(i>=0)S.tx[i]=t;else S.tx.push(t);
       save();ui.ym=t.date.slice(0,7);if(ui.view==='cal')ui.selDay=t.date;closeSheet();break}
     case 'deltx':{if(!confirm('이 내역을 지울까요?'))return;const t=S.tx.find(x=>x.id===form.id);t.del=true;t.upd=Date.now();save();closeSheet();break}
