@@ -360,6 +360,8 @@ function repBlock(){
 function acctChips(label){return '<div class="flabel">'+label+'</div><div class="cats">'+S.cats.acct.map(c=>'<button class="'+(form.acct===c?'on':'')+'" data-act="fset" data-f="acct" data-v="'+esc(c)+'">'+esc(c)+'</button>').join('')+'<button data-act="newacct">+ 추가</button></div>'}
 function lastAcct(who){const a=S.tx.filter(t=>!t.del&&t.who===who&&t.acct&&S.cats.acct.includes(t.acct)).sort((x,y)=>y.upd-x.upd)[0];return a?a.acct:''}
 function renderSheet(){
+  /* 항목을 고를 때마다 시트를 다시 그리므로, 보고 있던 위치를 기억했다가 되돌린다 */
+  const prev=$('#sheet .sheet'),keep=prev?prev.scrollTop:0;
   let b='';
   if(sheetKind==='tx'){
     b='<div class="sh"><h2>'+(form.id?'내역 고치기':'새 내역')+'</h2><button data-act="close" aria-label="닫기">✕</button></div>'+
@@ -397,6 +399,7 @@ function renderSheet(){
     '<div class="btns"><button class="btn" data-act="syncshare">연결 링크 보내기</button></div><p class="note">이 링크를 가진 사람은 가계부를 볼 수 있어요. 두 사람만 주고받아 주세요.</p>';
   }
   $('#sheet').innerHTML='<div class="dim" data-act="dim"><div class="sheet">'+b+'</div></div>';
+  if(keep)$('#sheet .sheet').scrollTop=keep;
 }
 const toNum=s=>Number(String(s).replace(/[^\d]/g,''))||0;
 document.addEventListener('input',e=>{
