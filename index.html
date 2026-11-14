@@ -29,10 +29,10 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .jua{font-family:'Jua','Gowun Dodum',sans-serif;font-weight:400}
 .num{font-variant-numeric:tabular-nums}
 #app{max-width:480px;margin:0 auto;min-height:100%;padding:0 16px calc(96px + env(safe-area-inset-bottom))}
-.in{color:var(--in)} .out{color:var(--out)} .sv,.save{color:var(--sum-d)} .gf,.gift{color:#B5790A}
+.in{color:var(--in)} .out{color:var(--out)} .sv,.save{color:var(--sum-d)} .gf,.gift{color:#2F7FD0}
 .gbar{display:flex;flex-direction:column;gap:2px;background:#FFF3D6;border-radius:var(--r);padding:10px 16px;margin-bottom:12px;font-size:13px;color:#8A6A2A}
 .gbar b{font-size:15px;color:#7A5200}
-.tag.gft{background:#FFF3D6;color:#B5790A}
+.tag.gft{background:var(--tw-bg);color:#2F7FD0}
 .sum4{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
 .sum4 div{display:flex;justify-content:space-between;align-items:baseline}
 .sum4 small{color:var(--sub);font-size:12px}
@@ -71,9 +71,9 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .day{padding:0;overflow:hidden}
 .day-h{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .day-h .d{font-family:'Jua',sans-serif;font-size:24px;line-height:1}
-.day-h .w{font-size:11px;padding:2px 7px;border-radius:8px;background:#F1ECEF;color:var(--sub)}
+.day-h .w{white-space:nowrap;flex:none;font-size:11px;padding:2px 7px;border-radius:8px;background:#F1ECEF;color:var(--sub)}
 .day-h .w.sun{background:var(--yr-bg);color:var(--yr-d)} .day-h .w.sat{background:var(--tw-bg);color:var(--tw-d)}
-.day-h .t{margin-left:auto;font-size:13px;display:flex;gap:10px}
+.day-h .t{margin-left:auto;font-size:13px;display:flex;gap:4px 10px;flex-wrap:wrap;justify-content:flex-end}
 .row{display:flex;align-items:center;gap:10px;padding:11px 16px;width:100%;text-align:left}
 .row+.row{border-top:1px solid #FAF2EE}
 .row .av svg{width:30px;height:30px;display:block}
@@ -284,18 +284,18 @@ function dayCards(tx,showEmpty){
   const by={};tx.forEach(t=>(by[t.date]=by[t.date]||[]).push(t));
   return Object.keys(by).sort().reverse().map(d=>{
     const a=by[d].sort((x,y)=>y.upd-x.upd),dt=new Date(d+'T00:00:00'),w=dt.getDay();
-    const i=sumOf(a,isIn),o=sumOf(a,isOut),v=sumOf(a,isSave);
-    return '<div class="card day"><div class="day-h"><span class="d">'+Number(d.slice(8))+'</span><span class="w '+(w===0?'sun':w===6?'sat':'')+'">'+'일월화수목금토'[w]+'요일</span><span class="t">'+(i?'<span class="in num">+'+won(i)+'</span>':'')+(o?'<span class="out num">-'+won(o)+'</span>':'')+(v?'<span class="sv num">저축 '+won(v)+'</span>':'')+'</span></div>'+
+    const i=sumOf(a,isIn),o=sumOf(a,isOut),v=sumOf(a,isSave),g=sumOf(a,x=>isGift(x)&&x.type==='out');
+    return '<div class="card day"><div class="day-h"><span class="d">'+Number(d.slice(8))+'</span><span class="w '+(w===0?'sun':w===6?'sat':'')+'">'+'일월화수목금토'[w]+'요일</span><span class="t">'+(i?'<span class="in num">+'+won(i)+'</span>':'')+(o?'<span class="out num">-'+won(o)+'</span>':'')+(v?'<span class="sv num">저축 '+won(v)+'</span>':'')+(g?'<span class="gf num">상품권 '+won(g)+'</span>':'')+'</span></div>'+
       a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||t.cat)+(t.type==='out'&&(t.kind==='fixed'||t.id.startsWith('fx-'))?'<span class="tag">매달</span>':'')+(isSave(t)?'<span class="tag">저축</span>':'')+(isGift(t)?'<span class="tag gft">상품권 '+(t.type==='in'?'받음':'사용')+'</span>':'')+'</b><small>'+P[t.who].name+' · '+esc(t.cat)+(t.acct?' · '+esc(t.acct):'')+(t.memo?' · '+esc(t.memo):'')+'</small></span><span class="amt num '+(isGift(t)?'gf':isSave(t)?'sv':t.type)+'">'+(t.type==='in'?'+':'-')+won(t.amount)+'</span></button>').join('')+'</div>';
   }).join('');
 }
 function calendar(tx){
   const[y,m]=ui.ym.split('-').map(Number),first=new Date(y,m-1,1).getDay(),n=lastDay(ui.ym),td=todayStr();
-  const by={};tx.forEach(t=>{const o=by[t.date]=by[t.date]||{in:0,out:0,sv:0,gf:0};o[isGift(t)?'gf':isSave(t)?'sv':t.type]+=t.amount});
+  const by={};tx.forEach(t=>{const o=by[t.date]=by[t.date]||{in:0,out:0,sv:0,gf:0};if(isGift(t)){if(t.type==='out')o.gf+=t.amount}else o[isSave(t)?'sv':t.type]+=t.amount});
   let h='<div class="card"><div class="cal">'+[...'일월화수목금토'].map(c=>'<div class="wd">'+c+'</div>').join('');
   for(let i=0;i<first;i++)h+='<span></span>';
   for(let d=1;d<=n;d++){const ds=ui.ym+'-'+pad2(d),w=(first+d-1)%7,o=by[ds];
-    h+='<button class="'+(w===0?'sun ':w===6?'sat ':'')+(ds===td?'today ':'')+(ds===ui.selDay?'sel':'')+'" data-act="day" data-d="'+ds+'"><span class="n">'+d+'</span>'+(o&&o.in?'<i class="in num">+'+o.in.toLocaleString()+'</i>':'')+(o&&o.out?'<i class="out num">-'+o.out.toLocaleString()+'</i>':'')+(o&&o.sv?'<i class="sv num">'+o.sv.toLocaleString()+'</i>':'')+'</button>'}
+    h+='<button class="'+(w===0?'sun ':w===6?'sat ':'')+(ds===td?'today ':'')+(ds===ui.selDay?'sel':'')+'" data-act="day" data-d="'+ds+'"><span class="n">'+d+'</span>'+(o&&o.in?'<i class="in num">+'+o.in.toLocaleString()+'</i>':'')+(o&&o.out?'<i class="out num">-'+o.out.toLocaleString()+'</i>':'')+(o&&o.sv?'<i class="sv num">'+o.sv.toLocaleString()+'</i>':'')+(o&&o.gf?'<i class="gf num">'+o.gf.toLocaleString()+'</i>':'')+'</button>'}
   return h+'</div></div>';
 }
 

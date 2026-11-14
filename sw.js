@@ -1,5 +1,5 @@
 // 태린 가계부 — 오프라인에서도 열리도록 캐시 (항상 최신 파일을 먼저 받아 옴)
-const CACHE = 'taerin-v7';
+const CACHE = 'taerin-v8';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-180.png'];
 
 self.addEventListener('install', e => {
