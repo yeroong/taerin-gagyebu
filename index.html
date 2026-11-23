@@ -67,6 +67,11 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .seg{display:flex;background:#F7EDE8;border-radius:14px;padding:4px;gap:4px;margin-bottom:12px}
 .seg button{flex:1;height:38px;border-radius:11px;color:var(--sub);font-family:'Jua',sans-serif;font-size:15px;display:flex;align-items:center;justify-content:center;gap:5px}
 .seg button svg{width:22px;height:22px}
+.ins{display:flex;gap:8px;padding:8px 0;font-size:14px;border-top:1px solid var(--line)}
+.ins i{font-style:normal;flex:none;width:14px;text-align:center}
+.ins.w i{color:var(--out)} .ins.g i{color:var(--in)} .ins.n i{color:var(--sub)}
+.tip{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:#FFECE8;color:#9A3B2A;border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:13px}
+.tip span{flex:1}.tip em{font-style:normal}
 .seg.m5 button{font-size:14px}
 .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
 
@@ -289,6 +294,7 @@ function vBook(){
   h+='<div class="bubble">'+(ui.who==='yr'?CH.yr:CH.tw)+'<div>'+(tx.length?
     '이번 달 '+whoLabel()+' <b class="out">'+won(out)+'</b> 썼어요.<br><span class="sub">매달 고정 '+won(fx)+' · 추가 지출 '+won(ex)+(sv?' · 저축 '+won(sv):'')+'</span>':
     '아직 기록이 없어요. 아래 <b>+</b> 버튼으로 적어 볼까요?')+'</div></div>';
+  {const w=insights(ui.ym,ui.who).warn;if(w.length)h+='<button class="tip" data-act="tab" data-k="stat"><span>⚠ '+w[0]+'</span><em>›</em></button>'}
   h+='<div class="seg"><button class="'+(ui.view==='cal'?'on':'')+'" data-act="view" data-k="cal">달력</button><button class="'+(ui.view==='list'?'on':'')+'" data-act="view" data-k="list">일일</button></div>';
   if(ui.view==='cal'){h+=calendar(tx);h+=dayCards(ui.selDay?tx.filter(t=>t.date===ui.selDay):[],!!ui.selDay)}
   else h+=dayCards(tx,true);
@@ -318,6 +324,7 @@ function vStat(){
   const all=monthTx(ui.ym,'all'),tx=monthTx(ui.ym,ui.who),ty=ui.statType;
   let h='<div class="who2">'+WHO.map(w=>{const a=all.filter(t=>t.who===w),i=sumOf(a,isIn),o=sumOf(a,isOut),v=sumOf(a,isSave);
     return '<div class="card"><div class="hd">'+CH[w]+P[w].name+'</div><p><span class="sub">수입</span><b class="in num">'+won(i)+'</b></p><p><span class="sub">지출</span><b class="out num">'+won(o)+'</b></p><p><span class="sub">저축</span><b class="sv num">'+won(v)+'</b></p><p><span class="sub">남은 돈</span><b class="num">'+won(i-o-v)+'</b></p></div>'}).join('')+'</div>';
+  h+=insightCard();
   const out=sumOf(tx,isOut),fx=sumOf(tx,t=>t.type==='out'&&t.kind==='fixed'),ex=out-fx;
   h+='<div class="card"><h2>매달 고정 vs 추가 지출 <small class="sub" style="font-family:inherit;font-size:12px">'+(ui.who==='all'?'합계':P[ui.who].name)+'</small></h2><div class="split"><span style="width:'+(out?fx/out*100:0)+'%;background:var(--sum)"></span><span style="width:'+(out?ex/out*100:0)+'%;background:var(--out)"></span></div><div class="legend"><span><b style="color:var(--sum-d)">●</b> 매달 고정 <b class="num">'+won(fx)+'</b></span><span><b class="out">●</b> 추가 <b class="num">'+won(ex)+'</b></span></div></div>';
   h+='<div class="seg"><button class="'+(ty==='out'?'on':'')+'" data-act="stype" data-k="out">지출</button><button class="'+(ty==='save'?'on':'')+'" data-act="stype" data-k="save">저축</button><button class="'+(ty==='gift'?'on':'')+'" data-act="stype" data-k="gift">상품권</button><button class="'+(ty==='in'?'on':'')+'" data-act="stype" data-k="in">수입</button></div>';
@@ -343,6 +350,46 @@ function vStat(){
   if(ty==='gift')return h+'</div>';
   h+='</div><div class="card"><h2>은행·카드별 '+TYN[ty]+'</h2>'+Object.keys(ag).sort((a,b)=>ag[b]-ag[a]).map(k=>'<div class="cat"><span class="pc" style="background:'+(k[0]==='('?'#B0A8B9':catColor('acct',k))+'">'+Math.round(ag[k]/tot*100)+'%</span><span class="nm">'+esc(k)+'</span><b class="num">'+won(ag[k])+'</b></div>').join('');
   return h+'</div>';
+}
+
+/* ───────── 절약 도우미: 지난 기록과 비교해 어디서 많이 쓰는지 알려 준다 ─────────
+   매달 고정으로 나가는 돈은 빼고, 줄일 수 있는 "추가 지출"만 본다. */
+const wr=n=>won(Math.round(n/1000)*1000); /* 천 원 단위로 반올림 */
+const isVar=t=>isOut(t)&&t.kind!=='fixed'&&!t.id.startsWith('fx-');
+function insights(ym,who){
+  const cur=monthTx(ym,who).filter(isVar),tot=sumOf(cur,()=>true),res={warn:[],good:[],info:[]};
+  if(!cur.length)return res;
+  const isNow=ym===todayStr().slice(0,7),day=isNow?Number(todayStr().slice(8)):31,when=isNow?'이맘때':'';
+  const byCat=a=>{const o={};a.forEach(t=>{const k=isCharge(t)?'상품권 충전':t.cat;o[k]=(o[k]||0)+t.amount});return o};
+  /* 1) 지난달 같은 시점과 전체 비교 */
+  const pvSame=sumOf(monthTx(shiftYm(ym,-1),who).filter(isVar),t=>Number(t.date.slice(8))<=day);
+  if(pvSame>0){const d=tot-pvSame,pc=Math.round(Math.abs(d)/pvSame*100);
+    if(d>=10000&&pc>=10)res.warn.push('지난달 '+(isNow?'같은 날':'')+'보다 추가 지출이 <b>'+won(d)+'</b> 많아요 (+'+pc+'%)');
+    else if(d<=-10000&&pc>=10)res.good.push('지난달 '+(isNow?'같은 날':'')+'보다 <b>'+won(-d)+'</b> 덜 썼어요');}
+  /* 2) 분류별: 지난 3개월 평균과 비교 (이번 달은 지난 날짜만큼만 기대치로 잡는다) */
+  const hist=[1,2,3].map(i=>monthTx(shiftYm(ym,-i),who).filter(isVar)).filter(a=>a.length).map(byCat);
+  const c=byCat(cur),scale=isNow?day/lastDay(ym):1;
+  if(hist.length){const up=[],down=[];
+    Object.keys(c).forEach(k=>{const avg=hist.reduce((x,o)=>x+(o[k]||0),0)/hist.length,exp=avg*scale,d=c[k]-exp;
+      if(avg<=0)return;
+      if(d>=10000&&c[k]>exp*1.2)up.push({k,d,avg});else if(d<=-10000&&c[k]<exp*0.8)down.push({k,d:-d});});
+    up.sort((a,b)=>b.d-a.d).slice(0,3).forEach(x=>res.warn.push('<b>'+esc(x.k)+'</b> 지출이 평소 '+when+'보다 <b>약 '+wr(x.d)+'</b> 많아요 <span class="sub">(평소 한 달 '+wr(x.avg)+')</span>'));
+    down.sort((a,b)=>b.d-a.d).slice(0,2).forEach(x=>res.good.push('<b>'+esc(x.k)+'</b> 지출은 평소 '+when+'보다 <b>약 '+wr(x.d)+'</b> 아꼈어요'));}
+  /* 3) 어디에 몰려 있나 */
+  const top=Object.keys(c).sort((a,b)=>c[b]-c[a])[0];
+  if(top&&tot>0&&c[top]/tot>=0.3&&Object.keys(c).length>1)res.info.push('추가 지출의 <b>'+Math.round(c[top]/tot*100)+'%</b>가 <b>'+esc(top)+'</b>예요 ('+won(c[top])+')');
+  const pl={};cur.forEach(t=>{if(!t.place||isCharge(t))return;const o=pl[t.place]=pl[t.place]||{n:0,s:0};o.n++;o.s+=t.amount});
+  const fp=Object.keys(pl).filter(k=>pl[k].n>=3).sort((a,b)=>pl[b].s-pl[a].s)[0];
+  if(fp)res.info.push('<b>'+esc(fp)+'</b>에 '+pl[fp].n+'번, 합쳐서 <b>'+won(pl[fp].s)+'</b> 썼어요');
+  if(cur.length>=5){const wd=[0,0,0,0,0,0,0];cur.forEach(t=>wd[new Date(t.date+'T00:00:00').getDay()]+=t.amount);
+    const mx=wd.indexOf(Math.max(...wd));if(wd[mx]/tot>=0.3)res.info.push('<b>'+'일월화수목금토'[mx]+'요일</b>에 가장 많이 써요 (추가 지출의 '+Math.round(wd[mx]/tot*100)+'%)');}
+  if(isNow&&day>=5&&day<lastDay(ym))res.info.push('이 속도면 이번 달 추가 지출은 약 <b>'+won(Math.round(tot/day*lastDay(ym)/1000)*1000)+'</b>이에요');
+  return res;
+}
+function insightCard(){
+  const r=insights(ui.ym,ui.who),li=(cls,mark,a)=>a.map(x=>'<div class="ins '+cls+'"><i>'+mark+'</i><span>'+x+'</span></div>').join('');
+  const body=li('w','▲',r.warn)+li('g','▼',r.good)+li('n','•',r.info);
+  return '<div class="card"><h2>절약 도우미 <small class="sub" style="font-family:inherit;font-size:12px">'+(ui.who==='all'?'합계':P[ui.who].name)+' · 고정지출 제외</small></h2>'+(body||'<div class="ins n"><i>•</i><span>아직 비교할 기록이 적어요. 기록이 쌓이면 어디서 아낄 수 있는지 알려 드릴게요.</span></div>')+'</div>';
 }
 
 function vFix(){
