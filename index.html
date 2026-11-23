@@ -209,7 +209,9 @@ if(!S.m2){const mv=S.cats.acct.filter(c=>/카드$/.test(c));if(mv.length&&mv.len
 /* 상품권·기프티콘(받음/사용)은 수입·지출에 넣지 않고 따로 센다 */
 const isGift=t=>t.kind==='gift',isCharge=t=>t.type==='out'&&t.kind==='charge',isVoucher=t=>t.kind==='gift'||isCharge(t);
 const vSign=t=>(isCharge(t)||t.type==='in')?1:-1; /* 충전·받음은 +, 사용은 - */
-const vBal=a=>a.reduce((x,t)=>x+vSign(t)*t.amount,0);
+const vAmt=t=>isCharge(t)&&t.face>0?t.face:t.amount; /* 상품권에 실제로 들어온·나간 금액 */
+const vBal=a=>a.reduce((x,t)=>x+vSign(t)*vAmt(t),0);
+const vSum=(a,f)=>a.reduce((x,t)=>x+(f(t)?vAmt(t):0),0);
 const vLabel=t=>isCharge(t)?'충전':t.type==='in'?'받음':'사용';
 const isIn=t=>t.type==='in'&&t.kind!=='gift';
 const isSave=t=>t.type==='out'&&t.kind==='save',isOut=t=>t.type==='out'&&t.kind!=='save'&&t.kind!=='gift';
@@ -280,7 +282,7 @@ function vBook(){
   const fx=sumOf(tx,t=>t.type==='out'&&t.kind==='fixed'),ex=out-fx;
   let h='<div class="card sum4"><div><small>수입</small><b class="in num">'+won(inc)+'</b></div><div><small>지출</small><b class="out num">'+won(out)+'</b></div><div><small>저축</small><b class="sv num">'+won(sv)+'</b></div><div><small>남은 돈</small><b class="num">'+won(inc-out-sv)+'</b></div></div>';
   const gAll=S.tx.filter(t=>!t.del&&isVoucher(t)&&(ui.who==='all'||t.who===ui.who));
-  if(gAll.length){const gi=sumOf(tx,x=>isVoucher(x)&&vSign(x)>0),go=sumOf(tx,x=>isGift(x)&&x.type==='out'),by={};
+  if(gAll.length){const gi=vSum(tx,x=>isVoucher(x)&&vSign(x)>0),go=sumOf(tx,x=>isGift(x)&&x.type==='out'),by={};
     gAll.forEach(t=>(by[t.cat]=by[t.cat]||[]).push(t));
     h+='<div class="gbar"><b>🎁 상품권 남은 금액 <span class="num">'+won(vBal(gAll))+'</span></b><span>이번 달 충전·받음 '+won(gi)+' · 사용 '+won(go)+'</span>'+
       Object.keys(by).sort().map(c=>'<button class="grow" data-act="gift" data-c="'+esc(c)+'"><span>'+esc(c)+'</span><b class="num">'+won(vBal(by[c]))+'</b><em>›</em></button>').join('')+'</div>'}
@@ -299,7 +301,7 @@ function dayCards(tx,showEmpty){
     const a=by[d].sort((x,y)=>y.upd-x.upd),dt=new Date(d+'T00:00:00'),w=dt.getDay();
     const i=sumOf(a,isIn),o=sumOf(a,isOut),v=sumOf(a,isSave),g=sumOf(a,x=>isGift(x)&&x.type==='out');
     return '<div class="card day"><div class="day-h"><span class="d">'+Number(d.slice(8))+'</span><span class="w '+(w===0?'sun':w===6?'sat':'')+'">'+'일월화수목금토'[w]+'요일</span><span class="t">'+(i?'<span class="in num">+'+won(i)+'</span>':'')+(o?'<span class="out num">-'+won(o)+'</span>':'')+(v?'<span class="sv num">저축 '+won(v)+'</span>':'')+(g?'<span class="gf num">상품권 '+won(g)+'</span>':'')+'</span></div>'+
-      a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||t.cat)+(t.type==='out'&&(t.kind==='fixed'||t.id.startsWith('fx-'))?'<span class="tag">매달</span>':'')+(isSave(t)?'<span class="tag">저축</span>':'')+(isVoucher(t)?'<span class="tag gft">상품권 '+vLabel(t)+'</span>':'')+'</b><small>'+P[t.who].name+' · '+esc(t.cat)+(t.acct?' · '+esc(t.acct):'')+(t.memo?' · '+esc(t.memo):'')+'</small></span><span class="amt num '+(isGift(t)?'gf':isSave(t)?'sv':t.type)+'">'+(t.type==='in'?'+':'-')+won(t.amount)+'</span></button>').join('')+'</div>';
+      a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||t.cat)+(t.type==='out'&&(t.kind==='fixed'||t.id.startsWith('fx-'))?'<span class="tag">매달</span>':'')+(isSave(t)?'<span class="tag">저축</span>':'')+(isVoucher(t)?'<span class="tag gft">상품권 '+vLabel(t)+'</span>':'')+'</b><small>'+P[t.who].name+' · '+esc(t.cat)+(t.acct?' · '+esc(t.acct):'')+(isCharge(t)&&t.face>0?' · '+won(t.face)+' 충전':'')+(t.memo?' · '+esc(t.memo):'')+'</small></span><span class="amt num '+(isGift(t)?'gf':isSave(t)?'sv':t.type)+'">'+(t.type==='in'?'+':'-')+won(t.amount)+'</span></button>').join('')+'</div>';
   }).join('');
 }
 function calendar(tx){
@@ -386,7 +388,8 @@ function renderSheet(){
     '<div class="seg m5">'+[['out','지출'],['in','수입'],['gift','상품권'],['fixed','고정'],['save','저축']].map(([v,l])=>'<button class="'+(fmode()===v?'on':'')+'" data-act="mode" data-v="'+v+'">'+l+'</button>').join('')+'</div>'+
     (form.type==='gift'?'<div class="seg"><button class="'+(form.gdir==='charge'?'on':'')+'" data-act="fset" data-f="gdir" data-v="charge">충전했어요</button><button class="'+(form.gdir==='in'?'on':'')+'" data-act="fset" data-f="gdir" data-v="in">받았어요</button><button class="'+(form.gdir==='out'?'on':'')+'" data-act="fset" data-f="gdir" data-v="out">썼어요</button></div><p class="note" style="margin:-6px 4px 12px">'+({charge:'내 돈으로 충전·구매한 금액이에요. 지출로 잡히고 그만큼 상품권 남은 금액이 늘어요.',in:'선물로 받은 금액이에요. 수입에는 넣지 않고 상품권 남은 금액만 늘어요.',out:'상품권으로 결제한 금액이에요. 지출에 또 잡히지 않고 남은 금액만 줄어요.'})[form.gdir]+'</p>':'')+
     (form.type==='out'?repBlock():'')+whoSeg()+
-    '<label class="f"><span>금액</span><input class="big" data-f="amount" inputmode="numeric" placeholder="0" value="'+esc(form.amount)+'"></label>'+
+    '<label class="f"><span>'+(form.type==='gift'&&form.gdir==='charge'?'실제로 결제한 금액 (지출로 잡혀요)':'금액')+'</span><input class="big" data-f="amount" inputmode="numeric" placeholder="0" value="'+esc(form.amount)+'"></label>'+
+    (form.type==='gift'&&form.gdir==='charge'?'<label class="f"><span>상품권에 충전된 금액 (할인받아 더 많이 충전됐을 때만, 같으면 비워 두세요)</span><input class="big" data-f="face" inputmode="numeric" placeholder="결제 금액과 같음" value="'+esc(form.face||'')+'"></label>':'')+
     '<label class="f"><span>날짜</span><input type="date" data-f="date" value="'+form.date+'"></label>'+catChips(form.type==='out'&&form.kind==='save'?'save':form.type)+(form.type==='gift'&&form.gdir!=='charge'?'':acctChips(form.type==='in'?'어디 은행으로 들어왔나요':'어디 은행·카드에서 나갔나요'))+
     '<label class="f"><span>'+(form.type==='out'&&form.kind!=='save'?'어디서 썼나요':'내용')+'</span><input data-f="place" maxlength="30" placeholder="'+(form.type==='gift'?'예: 스타벅스 기프티콘':form.type==='out'?'예: 이마트, 스타벅스':'예: 11월 월급')+'" value="'+esc(form.place)+'"></label>'+
     '<label class="f"><span>메모 (선택)</span><input data-f="memo" maxlength="40" value="'+esc(form.memo)+'"></label>'+
@@ -405,9 +408,9 @@ function renderSheet(){
   }else if(sheetKind==='gift'){
     const a=S.tx.filter(t=>!t.del&&isVoucher(t)&&t.cat===giftName&&(ui.who==='all'||t.who===ui.who)).sort((x,y)=>y.date.localeCompare(x.date)||y.upd-x.upd);
     b='<div class="sh"><h2>🎁 '+esc(giftName)+'</h2><button data-act="close" aria-label="닫기">✕</button></div>'+
-    '<div class="card" style="text-align:center"><small class="sub">'+(ui.who==='all'?'태원 + 예린':P[ui.who].name)+' 남은 금액</small><div class="jua num" style="font-size:28px;color:#2F7FD0">'+won(vBal(a))+'</div><small class="sub">충전·받음 '+won(sumOf(a,t=>vSign(t)>0))+' · 사용 '+won(sumOf(a,t=>vSign(t)<0))+'</small>'+(ui.who==='all'?'<div class="legend" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">'+WHO.map(w=>'<span>'+P[w].name+' <b class="num">'+won(vBal(a.filter(t=>t.who===w)))+'</b></span>').join('')+'</div>':'')+'</div>'+
+    '<div class="card" style="text-align:center"><small class="sub">'+(ui.who==='all'?'태원 + 예린':P[ui.who].name)+' 남은 금액</small><div class="jua num" style="font-size:28px;color:#2F7FD0">'+won(vBal(a))+'</div><small class="sub">충전·받음 '+won(vSum(a,t=>vSign(t)>0))+' · 사용 '+won(vSum(a,t=>vSign(t)<0))+'</small>'+(ui.who==='all'?'<div class="legend" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">'+WHO.map(w=>'<span>'+P[w].name+' <b class="num">'+won(vBal(a.filter(t=>t.who===w)))+'</b></span>').join('')+'</div>':'')+'</div>'+
     '<div class="btns" style="margin:0 0 12px"><button class="btn line" data-act="gadd" data-v="charge">충전</button><button class="btn line" data-act="gadd" data-v="in">받음</button><button class="btn" data-act="gadd" data-v="out">썼어요</button></div>'+
-    '<div class="card day">'+a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||vLabel(t))+'<span class="tag gft">'+vLabel(t)+'</span></b><small>'+Number(t.date.slice(5,7))+'월 '+Number(t.date.slice(8))+'일 · '+P[t.who].name+'</small></span><span class="amt num gf">'+(vSign(t)>0?'+':'-')+won(t.amount)+'</span></button>').join('')+'</div>';
+    '<div class="card day">'+a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||vLabel(t))+'<span class="tag gft">'+vLabel(t)+'</span></b><small>'+Number(t.date.slice(5,7))+'월 '+Number(t.date.slice(8))+'일 · '+P[t.who].name+(isCharge(t)&&t.face>0?' · 결제 '+won(t.amount):'')+'</small></span><span class="amt num gf">'+(vSign(t)>0?'+':'-')+won(vAmt(t))+'</span></button>').join('')+'</div>';
   }else if(sheetKind==='syncnew'){
     b='<div class="sh"><h2>동기화 처음 만들기</h2><button data-act="close" aria-label="닫기">✕</button></div>'+
     '<label class="f"><span>Firebase 실시간 데이터베이스 주소</span><input data-f="url" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="https://…-default-rtdb.firebaseio.com" value="'+esc(form.url)+'"></label>'+
@@ -428,7 +431,7 @@ function renderSheet(){
 const toNum=s=>Number(String(s).replace(/[^\d]/g,''))||0;
 document.addEventListener('input',e=>{
   const f=e.target.dataset.f;if(!f||!form)return;
-  if(f==='amount'){const n=toNum(e.target.value);e.target.value=n?n.toLocaleString('ko-KR'):''}
+  if(f==='amount'||f==='face'){const n=toNum(e.target.value);e.target.value=n?n.toLocaleString('ko-KR'):''}
   form[f]=e.target.value;
 });
 
@@ -448,7 +451,7 @@ document.addEventListener('click',e=>{
     case 'add':{const td=todayStr();
       form={type:'out',who:ui.who==='all'?S.me:ui.who,amount:'',date:ui.view==='cal'&&ui.selDay?ui.selDay:(td.slice(0,7)===ui.ym?td:ui.ym+'-01'),cat:S.cats.out[0],place:'',kind:'extra',memo:''};form.acct=lastAcct(form.who);
       return openSheet('tx')}
-    case 'edit':{const t=S.tx.find(x=>x.id===d.id);form=Object.assign({},t,{amount:t.amount.toLocaleString('ko-KR')});if(t.kind==='gift'){form.gdir=t.type;form.type='gift'}else if(t.kind==='charge'){form.gdir='charge';form.type='gift'}return openSheet('tx')}
+    case 'edit':{const t=S.tx.find(x=>x.id===d.id);form=Object.assign({},t,{amount:t.amount.toLocaleString('ko-KR'),face:t.face>0?t.face.toLocaleString('ko-KR'):''});if(t.kind==='gift'){form.gdir=t.type;form.type='gift'}else if(t.kind==='charge'){form.gdir='charge';form.type='gift'}return openSheet('tx')}
     case 'gift':giftName=d.c;return openSheet('gift');
     case 'gadd':form={type:'gift',gdir:d.v,who:ui.who==='all'?S.me:ui.who,amount:'',date:todayStr(),cat:giftName,place:'',kind:'extra',memo:'',acct:d.v==='charge'?lastAcct(S.me):''};return openSheet('tx');
     case 'newgift':{const v=(prompt('추가할 상품권 이름 (예: 남해사랑상품권)')||'').trim().slice(0,14);if(!v)return;if(!S.cats.gift.includes(v)){S.cats.gift.push(v);S.catsUpd=Date.now();save()}form.cat=v;return renderSheet()}
@@ -473,6 +476,7 @@ document.addEventListener('click',e=>{
         const ym=t.date.slice(0,7),fxd={id:uid(),name:t.place||t.cat,amount:n,who:t.who,day:Number(t.date.slice(8)),cat:t.cat,acct:t.acct,save:t.kind==='save',start:ym,upd:Date.now()};
         S.fixed.push(fxd);t.id='fx-'+fxd.id+'-'+ym;if(!t.place)t.place=fxd.name;
       }
+      {const fc=toNum(form.face);if(t.kind==='charge'&&fc&&fc!==n)t.face=fc}
       const i=S.tx.findIndex(x=>x.id===t.id);if(i>=0)S.tx[i]=t;else S.tx.push(t);
       save();ui.ym=t.date.slice(0,7);if(ui.view==='cal')ui.selDay=t.date;closeSheet();break}
     case 'deltx':{if(!confirm('이 내역을 지울까요?'))return;const t=S.tx.find(x=>x.id===form.id);t.del=true;t.upd=Date.now();save();closeSheet();break}
