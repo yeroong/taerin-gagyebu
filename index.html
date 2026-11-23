@@ -143,6 +143,8 @@ label.f input.big{font-size:22px;font-weight:700;text-align:right}
 .cats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .cats button{padding:8px 12px;border-radius:14px;background:#fff;border:1.5px solid var(--line);font-size:14px}
 .cats button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.cats button.edit{border-style:dashed;color:var(--sub)}
+.cats button.del{border-color:var(--out)}
 .cats button .x{margin-left:6px;color:var(--out)}
 .btns{display:flex;gap:8px;margin-top:6px}
 .btn{flex:1;height:52px;border-radius:16px;font-family:'Jua',sans-serif;font-size:17px;background:var(--ink);color:#fff}
@@ -370,7 +372,7 @@ function repBlock(){
   return form.kind==='fixed'?REPNOTE:'';
 }
 function acctTab(){return form.acctTab||(form.acct&&S.cats.card.includes(form.acct)?'card':'acct')}
-function acctChips(label){const k=acctTab();return '<div class="flabel">'+label+'</div><div class="seg"><button class="'+(k==='acct'?'on':'')+'" data-act="fset" data-f="acctTab" data-v="acct">은행</button><button class="'+(k==='card'?'on':'')+'" data-act="fset" data-f="acctTab" data-v="card">카드</button></div><div class="cats">'+S.cats[k].map(c=>'<button class="'+(form.acct===c&&!form.acctNew?'on':'')+'" data-act="fset" data-f="acct" data-v="'+esc(c)+'">'+esc(c)+'</button>').join('')+'</div><label class="f"><input data-f="acctNew" maxlength="14" placeholder="없으면 직접 입력 (자동 추가)" value="'+esc(form.acctNew||'')+'"></label>'}
+function acctChips(label){const k=acctTab(),ed=form.acctEdit,nm=k==='card'?'카드':'은행';return '<div class="flabel">'+label+'</div><div class="seg"><button class="'+(k==='acct'?'on':'')+'" data-act="fset" data-f="acctTab" data-v="acct">은행</button><button class="'+(k==='card'?'on':'')+'" data-act="fset" data-f="acctTab" data-v="card">카드</button></div><div class="cats">'+S.cats[k].map(c=>ed?'<button class="del" data-act="delacct" data-v="'+esc(c)+'">'+esc(c)+'<span class="x">✕</span></button>':'<button class="'+(form.acct===c&&!form.acctNew?'on':'')+'" data-act="fset" data-f="acct" data-v="'+esc(c)+'">'+esc(c)+'</button>').join('')+'<button class="edit" data-act="fset" data-f="acctEdit" data-v="'+(ed?'':'y')+'">'+(ed?'✓ 편집 끝':'✎ 목록 편집')+'</button></div>'+(ed?'<p class="note" style="margin:-6px 4px 12px">지울 '+nm+' 이름을 누르세요. 이미 적은 기록은 그대로 남아요.</p>':'<label class="f"><span>목록에 없는 '+nm+'만 여기에 이름 입력 (저장하면 목록에 추가)</span><input data-f="acctNew" maxlength="14" placeholder="'+(k==='card'?'예: 하나카드':'예: 농협은행')+'" value="'+esc(form.acctNew||'')+'"></label>')}
 /* 직접 적은 이름이 있으면 지금 보고 있는 목록(은행/카드)에 자동으로 추가하고 그 이름을 쓴다 */
 function pickAcct(){const v=(form.acctNew||'').trim().slice(0,14);if(!v)return form.acct||'';if(!S.cats.acct.includes(v)&&!S.cats.card.includes(v)){S.cats[acctTab()].push(v);S.catsUpd=Date.now()}return v}
 const fmode=()=>form.type!=='out'?form.type:form.kind==='fixed'?'fixed':form.kind==='save'?'save':'out';
@@ -401,9 +403,9 @@ function renderSheet(){
     S.cats[catType].map(c=>'<button data-act="delcat" data-v="'+esc(c)+'">'+esc(c)+'<span class="x">✕</span></button>').join('')+'</div>'+
     '<label class="f"><span>새로 추가</span><input id="newcat" maxlength="14" placeholder="'+(catType==='acct'?'예: 농협은행':catType==='card'?'예: 현대카드':'예: 반려동물')+'"></label><div class="btns"><button class="btn" data-act="addcat">추가</button></div><p class="note">지워도 이미 적은 기록은 그대로 남아요.</p>';
   }else if(sheetKind==='gift'){
-    const a=S.tx.filter(t=>!t.del&&isVoucher(t)&&t.cat===giftName).sort((x,y)=>y.date.localeCompare(x.date)||y.upd-x.upd);
+    const a=S.tx.filter(t=>!t.del&&isVoucher(t)&&t.cat===giftName&&(ui.who==='all'||t.who===ui.who)).sort((x,y)=>y.date.localeCompare(x.date)||y.upd-x.upd);
     b='<div class="sh"><h2>🎁 '+esc(giftName)+'</h2><button data-act="close" aria-label="닫기">✕</button></div>'+
-    '<div class="card" style="text-align:center"><small class="sub">남은 금액 (태원 + 예린)</small><div class="jua num" style="font-size:28px;color:#2F7FD0">'+won(vBal(a))+'</div><small class="sub">충전·받음 '+won(sumOf(a,t=>vSign(t)>0))+' · 사용 '+won(sumOf(a,t=>vSign(t)<0))+'</small></div>'+
+    '<div class="card" style="text-align:center"><small class="sub">'+(ui.who==='all'?'태원 + 예린':P[ui.who].name)+' 남은 금액</small><div class="jua num" style="font-size:28px;color:#2F7FD0">'+won(vBal(a))+'</div><small class="sub">충전·받음 '+won(sumOf(a,t=>vSign(t)>0))+' · 사용 '+won(sumOf(a,t=>vSign(t)<0))+'</small>'+(ui.who==='all'?'<div class="legend" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">'+WHO.map(w=>'<span>'+P[w].name+' <b class="num">'+won(vBal(a.filter(t=>t.who===w)))+'</b></span>').join('')+'</div>':'')+'</div>'+
     '<div class="btns" style="margin:0 0 12px"><button class="btn line" data-act="gadd" data-v="charge">충전</button><button class="btn line" data-act="gadd" data-v="in">받음</button><button class="btn" data-act="gadd" data-v="out">썼어요</button></div>'+
     '<div class="card day">'+a.map(t=>'<button class="row" data-act="edit" data-id="'+t.id+'"><span class="av">'+CH[t.who]+'</span><span class="mid"><b>'+esc(t.place||vLabel(t))+'<span class="tag gft">'+vLabel(t)+'</span></b><small>'+Number(t.date.slice(5,7))+'월 '+Number(t.date.slice(8))+'일 · '+P[t.who].name+'</small></span><span class="amt num gf">'+(vSign(t)>0?'+':'-')+won(t.amount)+'</span></button>').join('')+'</div>';
   }else if(sheetKind==='syncnew'){
@@ -448,11 +450,12 @@ document.addEventListener('click',e=>{
       return openSheet('tx')}
     case 'edit':{const t=S.tx.find(x=>x.id===d.id);form=Object.assign({},t,{amount:t.amount.toLocaleString('ko-KR')});if(t.kind==='gift'){form.gdir=t.type;form.type='gift'}else if(t.kind==='charge'){form.gdir='charge';form.type='gift'}return openSheet('tx')}
     case 'gift':giftName=d.c;return openSheet('gift');
-    case 'gadd':form={type:'gift',gdir:d.v,who:S.me,amount:'',date:todayStr(),cat:giftName,place:'',kind:'extra',memo:'',acct:d.v==='charge'?lastAcct(S.me):''};return openSheet('tx');
+    case 'gadd':form={type:'gift',gdir:d.v,who:ui.who==='all'?S.me:ui.who,amount:'',date:todayStr(),cat:giftName,place:'',kind:'extra',memo:'',acct:d.v==='charge'?lastAcct(S.me):''};return openSheet('tx');
     case 'newgift':{const v=(prompt('추가할 상품권 이름 (예: 남해사랑상품권)')||'').trim().slice(0,14);if(!v)return;if(!S.cats.gift.includes(v)){S.cats.gift.push(v);S.catsUpd=Date.now();save()}form.cat=v;return renderSheet()}
     case 'addfix':form={name:'',amount:'',who:S.me,day:'1',cat:S.cats.out[0],acct:'',save:''};return openSheet('fix');
     case 'editfix':{const f=S.fixed.find(x=>x.id===d.id);form=Object.assign({},f,{amount:f.amount.toLocaleString('ko-KR'),day:String(f.day)});return openSheet('fix')}
     case 'close':return closeSheet();
+    case 'delacct':{const k=acctTab();if(S.cats[k].length<=1)return alert('하나 이상은 있어야 해요');S.cats[k]=S.cats[k].filter(c=>c!==d.v);S.catsUpd=Date.now();if(form.acct===d.v)form.acct='';save();return renderSheet()}
     case 'newacct':{const v=(prompt('추가할 은행·카드 이름')||'').trim().slice(0,14);if(!v)return;if(!S.cats.acct.includes(v)){S.cats.acct.push(v);S.catsUpd=Date.now();save()}form.acct=v;return renderSheet()}
     case 'mode':{const v=d.v;
       if(v==='in'||v==='gift'){form.type=v;form.kind='extra';form.cat=S.cats[v][0];form.gdir=form.gdir||'out'}
